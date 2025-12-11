@@ -12,7 +12,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.singlestore</groupId>
     <artifactId>r2dbc-singlestore</artifactId>
-    <version>0.0.1-beta</version>
+    <version>1.0.0</version>
     <packaging>jar</packaging>
     <url>https://github.com/singlestore-labs/singlestore-connector-r2dbc</url>
 
