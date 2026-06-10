@@ -25,7 +25,7 @@ The SingleStore Connector is available through maven using :
 		<dependency>
 				<groupId>com.singlestore</groupId>
 				<artifactId>r2dbc-singlestore</artifactId>
-				<version>1.0.0</version>
+				<version>x.y.z</version>
 		</dependency>
 ```
 
@@ -164,6 +164,30 @@ There is some limitations.
  - Huge command will temporarily disable transaction buffering for current transaction.
  - Commands must be idempotent only (queries can be "replayable")
 
+## Release process
+
+Releases are fully automated. The only step required is to push a version tag.
+
+Use semantic versioning with a `v` prefix:
+
+```
+v<major>.<minor>.<patch>
+```
+
+Examples: `v1.0.0`, `v1.2.3`
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+The package version is derived from the tag (the leading `v` is stripped).
+
+Pushing a tag triggers the [Release workflow](.github/workflows/release.yml), which:
+
+1. Builds the package
+2. Creates a [GitHub Release](https://github.com/singlestore-labs/singlestore-connector-r2dbc/releases/) with auto-generated release notes
+3. Publishes the package to [Maven Central](https://central.sonatype.com/artifact/com.singlestore/r2dbc-singlestore)
 
 [maven-image]:https://img.shields.io/maven-central/v/com.singlestore/r2dbc-singlestore.svg
 
