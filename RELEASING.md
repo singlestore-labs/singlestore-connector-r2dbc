@@ -22,8 +22,9 @@ The package version is derived from the tag (the leading `v` is stripped).
 Pushing a tag triggers the [Release workflow](.github/workflows/release.yml), which:
 
 1. Builds the package
-2. Creates a [GitHub Release](https://github.com/singlestore-labs/singlestore-connector-r2dbc/releases/) with auto-generated release notes
-3. Publishes the package to [Maven Central](https://central.sonatype.com/artifact/com.singlestore/r2dbc-singlestore)
+2. Signs the JAR with Azure Trusted Signing and verifies the signature
+3. Creates a [GitHub Release](https://github.com/singlestore-labs/singlestore-connector-r2dbc/releases/) with auto-generated release notes
+4. Publishes the package to [Maven Central](https://central.sonatype.com/artifact/com.singlestore/r2dbc-singlestore)
 
 ## Driver-Server Version Compatibility Matrix
 
