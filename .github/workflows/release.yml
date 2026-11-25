@@ -78,11 +78,9 @@ jobs:
         run: |
           jarsigner -verify -strict \
             "target/r2dbc-singlestore-${{ env.RELEASE_VERSION }}.jar"
-      # Deploy the exact JARs that were signed in "Build archive" and verified above:
-      # no `clean` (it would delete them) and no re-signing (-DskipJsign=true).
       - name: Release to Maven Central
         if: ${{ success() }}
-        run: mvn -B -s ci/settings.xml deploy -DskipTests -DskipJsign=true -Dsonatype.username=${{ secrets.SONATYPE_USER }} -Dsonatype.password=${{ secrets.SONATYPE_PASSWORD }}
+        run: mvn -s ci/settings.xml clean deploy -DskipTests -DskipJsign=false -Dsonatype.username=${{ secrets.SONATYPE_USER }} -Dsonatype.password=${{ secrets.SONATYPE_PASSWORD }}
       - name: Release on GitHub
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
