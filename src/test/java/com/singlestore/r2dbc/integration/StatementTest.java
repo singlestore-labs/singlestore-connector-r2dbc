@@ -79,6 +79,12 @@ public class StatementTest extends BaseConnectionTest {
                 + " varchar(10))")
         .execute()
         .blockLast();
+    sharedConn
+        .createStatement(
+            "CREATE TABLE updateDeleteReturning (id int not null primary key auto_increment, test"
+                + " varchar(10))")
+        .execute()
+        .blockLast();
   }
 
   @AfterAll
@@ -100,6 +106,7 @@ public class StatementTest extends BaseConnectionTest {
     sharedConn.createStatement("DROP TABLE IF EXISTS get_pos").execute().blockLast();
     sharedConn.createStatement("DROP TABLE IF EXISTS INSERT_RETURNING").execute().blockLast();
     sharedConn.createStatement("DROP TABLE IF EXISTS returningBefore105").execute().blockLast();
+    sharedConn.createStatement("DROP TABLE IF EXISTS updateDeleteReturning").execute().blockLast();
   }
 
   private static int[] randParams() {
@@ -323,24 +330,6 @@ public class StatementTest extends BaseConnectionTest {
         .as(StepVerifier::create)
         .expectNext(2L)
         .verifyComplete();
-    if (minVersion(9, 1, 0)) {
-      sharedConn
-          .createStatement("INSERT INTO dupplicate(test) VALUES ('test3'), ('test4') RETURNING *")
-          .execute()
-          .flatMap(r -> r.getRowsUpdated())
-          .as(StepVerifier::create)
-          .expectNext(2L)
-          .verifyComplete();
-
-      sharedConn
-          .createStatement("INSERT INTO dupplicate(test) VALUES ('test5') RETURNING *")
-          .execute()
-          .flatMap(r -> r.getRowsUpdated())
-          .as(StepVerifier::create)
-          .expectNext(1L)
-          .verifyComplete();
-    }
-
     sharedConn
         .createStatement("INSERT INTO dupplicate(id, test) VALUES (1, 'dupplicate')")
         .execute()
@@ -352,6 +341,28 @@ public class StatementTest extends BaseConnectionTest {
                     && (throwable.getMessage().contains("Duplicate entry '1' for key")
                         || throwable.getMessage().contains("Duplicate key in container")))
         .verify();
+    sharedConn.rollbackTransaction().block();
+  }
+
+  @Test
+  @Disabled("SingleStore does not support INSERT ... RETURNING")
+  public void dupplicateInsertReturning() {
+    sharedConn.beginTransaction().block();
+    sharedConn
+        .createStatement("INSERT INTO dupplicate(test) VALUES ('test3'), ('test4') RETURNING *")
+        .execute()
+        .flatMap(r -> r.getRowsUpdated())
+        .as(StepVerifier::create)
+        .expectNext(2L)
+        .verifyComplete();
+
+    sharedConn
+        .createStatement("INSERT INTO dupplicate(test) VALUES ('test5') RETURNING *")
+        .execute()
+        .flatMap(r -> r.getRowsUpdated())
+        .as(StepVerifier::create)
+        .expectNext(1L)
+        .verifyComplete();
     sharedConn.rollbackTransaction().block();
   }
 
@@ -458,14 +469,12 @@ public class StatementTest extends BaseConnectionTest {
 
   @Test
   public void returning() {
-    if (!minVersion(9, 1, 0)) {
-      Assertions.assertThrows(
-          IllegalArgumentException.class,
-          () ->
-              sharedConn
-                  .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test1'), ('test2')")
-                  .returnGeneratedValues("id", "test"));
-    }
+    Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            sharedConn
+                .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test1'), ('test2')")
+                .returnGeneratedValues("id", "test"));
     sharedConn.beginTransaction().block();
     sharedConn
         .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test3')")
@@ -475,43 +484,84 @@ public class StatementTest extends BaseConnectionTest {
         .as(StepVerifier::create)
         .expectNext("1")
         .verifyComplete();
+    sharedConn.rollbackTransaction().block();
+  }
 
-    if (minVersion(9, 1, 0)) {
+  @Test
+  @Disabled("SingleStore does not support INSERT ... RETURNING")
+  public void insertReturning() {
+    sharedConn.beginTransaction().block();
+    sharedConn
+        .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test3'), ('test4')")
+        .returnGeneratedValues("id")
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("2", "3")
+        .verifyComplete();
+    sharedConn
+        .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test1'), ('test2')")
+        .returnGeneratedValues("id", "test")
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("4test1", "5test2")
+        .verifyComplete();
 
-      sharedConn
-          .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test3'), ('test4')")
-          .returnGeneratedValues("id")
-          .execute()
-          .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class)))
-          .as(StepVerifier::create)
-          .expectNext("2", "3")
-          .verifyComplete();
-      sharedConn
-          .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('test1'), ('test2')")
-          .returnGeneratedValues("id", "test")
-          .execute()
-          .flatMap(
-              r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
-          .as(StepVerifier::create)
-          .expectNext("4test1", "5test2")
-          .verifyComplete();
+    sharedConn
+        .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('a'), ('b')")
+        .returnGeneratedValues()
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("6a", "7b")
+        .verifyComplete();
+    sharedConn.rollbackTransaction().block();
+  }
 
-      sharedConn
-          .createStatement("INSERT INTO INSERT_RETURNING(test) VALUES ('a'), ('b')")
-          .returnGeneratedValues()
-          .execute()
-          .flatMap(
-              r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
-          .as(StepVerifier::create)
-          .expectNext("6a", "7b")
-          .verifyComplete();
-    }
+  @Test
+  public void updateDeleteReturning() {
+    Assumptions.assumeTrue(minVersion(9, 1, 0));
+    sharedConn.beginTransaction().block();
+    sharedConn
+        .createStatement("INSERT INTO updateDeleteReturning(test) VALUES ('a'), ('b'), ('c')")
+        .execute()
+        .blockLast();
+
+    // UPDATE with RETURNING written in the SQL text
+    sharedConn
+        .createStatement(
+            "UPDATE updateDeleteReturning SET test = 'x' WHERE id = 1 RETURNING id, test")
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("1x")
+        .verifyComplete();
+
+    // UPDATE with RETURNING added by returnGeneratedValues
+    sharedConn
+        .createStatement("UPDATE updateDeleteReturning SET test = 'y' WHERE id = 2")
+        .returnGeneratedValues("id", "test")
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class) + row.get(1, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("2y")
+        .verifyComplete();
+
+    // DELETE with RETURNING written in the SQL text
+    sharedConn
+        .createStatement("DELETE FROM updateDeleteReturning WHERE id = 3 RETURNING id")
+        .execute()
+        .flatMap(r -> r.map((row, metadata) -> row.get(0, String.class)))
+        .as(StepVerifier::create)
+        .expectNext("3")
+        .verifyComplete();
+
     sharedConn.rollbackTransaction().block();
   }
 
   @Test
   public void returningBefore105() {
-    Assumptions.assumeFalse((minVersion(9, 1, 0)));
     sharedConn.beginTransaction().block();
     try {
       sharedConn
@@ -569,7 +619,6 @@ public class StatementTest extends BaseConnectionTest {
 
   @Test
   public void returningBefore105WithParameter() {
-    Assumptions.assumeFalse((minVersion(9, 1, 0)));
     try {
       sharedConn
           .createStatement("INSERT INTO returningBefore105WithParameter(test) VALUES (?), (?)")
@@ -644,8 +693,8 @@ public class StatementTest extends BaseConnectionTest {
   }
 
   @Test
+  @Disabled("SingleStore does not support INSERT ... RETURNING")
   public void prepareReturning() {
-    Assumptions.assumeTrue(minVersion(9, 1, 0));
     sharedConn.beginTransaction().block();
     sharedConn
         .createStatement("INSERT INTO prepareReturning(test) VALUES (?), (?)")
@@ -742,7 +791,6 @@ public class StatementTest extends BaseConnectionTest {
 
   @Test
   public void prepareReturningBefore105() {
-    Assumptions.assumeFalse((minVersion(9, 1, 0)));
     sharedConn.beginTransaction().block();
     try {
       sharedConn

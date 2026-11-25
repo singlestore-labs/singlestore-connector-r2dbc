@@ -74,7 +74,7 @@ final class SingleStoreServerParameterizedQueryStatement extends SingleStoreComm
   public SingleStoreServerParameterizedQueryStatement returnGeneratedValues(String... columns) {
     Assert.requireNonNull(columns, "columns must not be null");
 
-    if (!client.getVersion().supportReturning() && columns.length > 1) {
+    if (!returningSupported() && columns.length > 1) {
       throw new IllegalArgumentException(
           "returnGeneratedValues can have only one column");
     }
@@ -86,7 +86,7 @@ final class SingleStoreServerParameterizedQueryStatement extends SingleStoreComm
   public Flux<SingleStoreResult> execute() {
     String realSql = paramParser == null ? this.initialSql : paramParser.getRealSql();
     String sql;
-    if (this.generatedColumns == null || !client.getVersion().supportReturning()) {
+    if (this.generatedColumns == null || !returningSupported()) {
       sql = realSql;
     } else {
       sql = augment(realSql, this.generatedColumns);

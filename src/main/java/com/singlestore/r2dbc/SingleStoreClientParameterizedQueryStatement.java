@@ -51,7 +51,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
   public Flux<SingleStoreResult> execute() {
     String sql;
     ExceptionFactory factory;
-    if (this.generatedColumns == null || !client.getVersion().supportReturning()) {
+    if (this.generatedColumns == null || !returningSupported()) {
       sql = this.initialSql;
       factory = this.factory;
     } else {
@@ -73,7 +73,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
                       new QueryWithParametersPacket(
                           parser,
                           binding.getBindResultParameters(getExpectedSize()),
-                          client.getVersion().supportReturning() ? generatedColumns : null),
+                          returningSupported() ? generatedColumns : null),
                       false);
               return toResult(Protocol.TEXT, messages, factory, null);
             }
@@ -95,7 +95,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
                                   new QueryWithParametersPacket(
                                       parser,
                                       it.getBindResultParameters(getExpectedSize()),
-                                      client.getVersion().supportReturning()
+                                      returningSupported()
                                           ? generatedColumns
                                           : null),
                                   false)
@@ -128,7 +128,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
       parser =
           ClientParser.parameterPartsCheckReturning(
               this.initialSql, this.client.noBackslashEscapes());
-    if (!client.getVersion().supportReturning() && columns.length > 1) {
+    if (!returningSupported() && columns.length > 1) {
       throw new IllegalArgumentException(
           "returnGeneratedValues can have only one column");
     }

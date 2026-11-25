@@ -21,6 +21,7 @@ import com.singlestore.r2dbc.message.Protocol;
 import com.singlestore.r2dbc.message.ServerMessage;
 import com.singlestore.r2dbc.util.Assert;
 import com.singlestore.r2dbc.util.Binding;
+import com.singlestore.r2dbc.util.ClientParser;
 import com.singlestore.r2dbc.util.ServerPrepareResult;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -133,6 +134,17 @@ public abstract class SingleStoreCommonStatement implements SingleStoreStatement
 
   protected abstract int getColumnIndex(String name);
 
+  /**
+   * RETURNING is used only for UPDATE and DELETE, and only on servers that support it. INSERT ...
+   * RETURNING is not supported by SingleStore, so generated keys for INSERT are read from the OK
+   * packet's last insert id.
+   *
+   * @return true if RETURNING should be added to this statement
+   */
+  protected boolean returningSupported() {
+    return client.getVersion().supportReturning() && ClientParser.isUpdateOrDelete(initialSql);
+  }
+
   @Nonnull
   protected Binding getCurrentBinding() {
     return currentBinding;
@@ -154,7 +166,7 @@ public abstract class SingleStoreCommonStatement implements SingleStoreStatement
                     dataRow,
                     factory,
                     generatedColumns,
-                    client.getVersion().supportReturning(),
+                    returningSupported(),
                     configuration))
         .cast(SingleStoreResult.class);
   }

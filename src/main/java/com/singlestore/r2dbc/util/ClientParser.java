@@ -36,6 +36,40 @@ public final class ClientParser implements PrepareResult {
   }
 
   /**
+   * Returns true when the statement's leading keyword is UPDATE or DELETE. Leading whitespace and
+   * comments are skipped. Statements starting with WITH or a parenthesis are not detected.
+   *
+   * @param sql statement
+   * @return true if the statement is an UPDATE or DELETE
+   */
+  public static boolean isUpdateOrDelete(String sql) {
+    int length = sql.length();
+    int i = 0;
+    while (i < length) {
+      char c = sql.charAt(i);
+      if (Character.isWhitespace(c)) {
+        i++;
+      } else if (sql.startsWith("/*", i)) {
+        int end = sql.indexOf("*/", i + 2);
+        if (end < 0) return false;
+        i = end + 2;
+      } else if (sql.startsWith("--", i) || c == '#') {
+        int end = sql.indexOf('\n', i);
+        if (end < 0) return false;
+        i = end + 1;
+      } else {
+        break;
+      }
+    }
+    int start = i;
+    while (i < length && Character.isLetter(sql.charAt(i))) {
+      i++;
+    }
+    String keyword = sql.substring(start, i);
+    return "UPDATE".equalsIgnoreCase(keyword) || "DELETE".equalsIgnoreCase(keyword);
+  }
+
+  /**
    * Separate query in a String list and set flag isQueryMultipleRewritable. The resulting string
    * list is separed by ? that are not in comments. isQueryMultipleRewritable flag is set if query
    * can be rewrite in one query (all case but if using "-- comment"). example for query : "INSERT

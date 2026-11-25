@@ -83,8 +83,8 @@ public class ResultsetTest extends BaseConnectionTest {
   }
 
   @Test
+  @Disabled("SingleStore does not support INSERT ... RETURNING")
   public void returning() {
-    Assumptions.assumeTrue(minVersion(9, 1, 0));
     sharedConn
         .createStatement(
             "CREATE TEMPORARY TABLE INSERT_RETURNING (id int not null primary key auto_increment,"
