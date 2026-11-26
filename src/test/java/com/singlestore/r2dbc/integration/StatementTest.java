@@ -524,7 +524,8 @@ public class StatementTest extends BaseConnectionTest {
     Assumptions.assumeTrue(minVersion(9, 1, 0));
     sharedConn.beginTransaction().block();
     sharedConn
-        .createStatement("INSERT INTO updateDeleteReturning(test) VALUES ('a'), ('b'), ('c')")
+        .createStatement(
+            "INSERT INTO updateDeleteReturning(id, test) VALUES (1, 'a'), (2, 'b'), (3, 'c')")
         .execute()
         .blockLast();
 

@@ -537,6 +537,45 @@ public class ClientPrepareResultTest {
         new String[] {"UPDATE tt (tt, tt2) VALUES (LAST_INSERT_ID(), ", ", _RETURNING)"});
   }
 
+  private void checkStatementType(String sql, ClientParser.StatementType expected) {
+    ClientParser res = ClientParser.parameterPartsCheckReturning(sql, false);
+    Assertions.assertEquals(expected, res.getStatementType());
+    Assertions.assertEquals(
+        expected == ClientParser.StatementType.UPDATE
+            || expected == ClientParser.StatementType.DELETE,
+        res.isUpdateOrDelete());
+  }
+
+  @Test
+  public void testStatementType() {
+    checkStatementType("INSERT INTO tt VALUES (?)", ClientParser.StatementType.INSERT);
+    checkStatementType("UPDATE tt SET a = ? WHERE id = 1", ClientParser.StatementType.UPDATE);
+    checkStatementType("DELETE FROM tt WHERE id = ?", ClientParser.StatementType.DELETE);
+    checkStatementType("  update tt set a = 1", ClientParser.StatementType.UPDATE);
+    checkStatementType("/* hint */ DELETE FROM tt", ClientParser.StatementType.DELETE);
+    checkStatementType("-- note\nUPDATE tt SET a = 1", ClientParser.StatementType.UPDATE);
+    checkStatementType("# note\nDELETE FROM tt", ClientParser.StatementType.DELETE);
+
+    // the first keyword wins: UPDATE in ON DUPLICATE KEY UPDATE does not change the type
+    checkStatementType(
+        "INSERT INTO tt(a) VALUES (1) ON DUPLICATE KEY UPDATE a = 2",
+        ClientParser.StatementType.INSERT);
+
+    // statement starting with a CTE
+    checkStatementType(
+        "WITH c AS (SELECT id FROM tt) UPDATE tt SET a = 1 WHERE id IN (SELECT id FROM c)",
+        ClientParser.StatementType.UPDATE);
+
+    // keywords in strings, comments and identifiers are ignored
+    checkStatementType("SELECT 'update', \"delete\" FROM tt /* insert */ # delete", null);
+    checkStatementType("SELECT * FROM update_log, delete_log", null);
+    checkStatementType("CREATE TABLE tt (id INT)", null);
+
+    // the type is only computed when checking RETURNING
+    Assertions.assertNull(
+        ClientParser.parameterParts("UPDATE tt SET a = 1", false).getStatementType());
+  }
+
   @Test
   public void testValuesForPartition() throws Exception {
     checkParsing(

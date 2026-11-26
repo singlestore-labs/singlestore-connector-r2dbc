@@ -22,7 +22,7 @@ import reactor.core.publisher.Sinks;
 
 final class SingleStoreClientParameterizedQueryStatement extends SingleStoreCommonStatement {
 
-  private ClientParser parser;
+  private final ClientParser parser;
 
   SingleStoreClientParameterizedQueryStatement(
       Client client, String sql, SingleStoreConnectionConfiguration configuration) {
@@ -73,7 +73,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
                       new QueryWithParametersPacket(
                           parser,
                           binding.getBindResultParameters(getExpectedSize()),
-                          returningSupported() ? generatedColumns : null),
+                          returningColumns()),
                       false);
               return toResult(Protocol.TEXT, messages, factory, null);
             }
@@ -95,9 +95,7 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
                                   new QueryWithParametersPacket(
                                       parser,
                                       it.getBindResultParameters(getExpectedSize()),
-                                      returningSupported()
-                                          ? generatedColumns
-                                          : null),
+                                      returningColumns()),
                                   false)
                               .doOnComplete(() -> tryNextBinding(iterator, bindingSink, canceled));
 
@@ -124,15 +122,11 @@ final class SingleStoreClientParameterizedQueryStatement extends SingleStoreComm
   @Override
   public SingleStoreClientParameterizedQueryStatement returnGeneratedValues(String... columns) {
     Assert.requireNonNull(columns, "columns must not be null");
-    if (parser.supportAddingReturning() == null)
-      parser =
-          ClientParser.parameterPartsCheckReturning(
-              this.initialSql, this.client.noBackslashEscapes());
     if (!returningSupported() && columns.length > 1) {
       throw new IllegalArgumentException(
           "returnGeneratedValues can have only one column");
     }
-    parser.validateAddingReturning();
+    returningParser().validateAddingReturning();
     this.generatedColumns = columns;
     return this;
   }

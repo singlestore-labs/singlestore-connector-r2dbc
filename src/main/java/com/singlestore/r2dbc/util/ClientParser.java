@@ -17,12 +17,14 @@ public final class ClientParser implements PrepareResult {
   private final int paramCount;
   private final Boolean isReturning;
   private final Boolean supportAddingReturning;
+  private final StatementType statementType;
 
   private ClientParser(
       String sql,
       byte[] query,
       Boolean isReturning,
       Boolean supportAddingReturning,
+      StatementType statementType,
       List<Integer> paramPositions,
       List<String> paramNameList) {
     this.sql = sql;
@@ -33,40 +35,7 @@ public final class ClientParser implements PrepareResult {
     this.paramCount = paramPositions.size() / 2;
     this.isReturning = isReturning;
     this.supportAddingReturning = supportAddingReturning;
-  }
-
-  /**
-   * Returns true when the statement's leading keyword is UPDATE or DELETE. Leading whitespace and
-   * comments are skipped. Statements starting with WITH or a parenthesis are not detected.
-   *
-   * @param sql statement
-   * @return true if the statement is an UPDATE or DELETE
-   */
-  public static boolean isUpdateOrDelete(String sql) {
-    int length = sql.length();
-    int i = 0;
-    while (i < length) {
-      char c = sql.charAt(i);
-      if (Character.isWhitespace(c)) {
-        i++;
-      } else if (sql.startsWith("/*", i)) {
-        int end = sql.indexOf("*/", i + 2);
-        if (end < 0) return false;
-        i = end + 2;
-      } else if (sql.startsWith("--", i) || c == '#') {
-        int end = sql.indexOf('\n', i);
-        if (end < 0) return false;
-        i = end + 1;
-      } else {
-        break;
-      }
-    }
-    int start = i;
-    while (i < length && Character.isLetter(sql.charAt(i))) {
-      i++;
-    }
-    String keyword = sql.substring(start, i);
-    return "UPDATE".equalsIgnoreCase(keyword) || "DELETE".equalsIgnoreCase(keyword);
+    this.statementType = statementType;
   }
 
   /**
@@ -90,6 +59,9 @@ public final class ClientParser implements PrepareResult {
     boolean singleQuotes = false;
     boolean returning = false;
     boolean supportAddingReturning = false;
+    // type of the first INSERT/UPDATE/DELETE keyword found outside strings and comments, so
+    // INSERT ... ON DUPLICATE KEY UPDATE is an INSERT and WITH ... UPDATE is an UPDATE
+    StatementType statementType = null;
     byte[] query = queryString.getBytes(StandardCharsets.UTF_8);
     int queryLength = query.length;
 
@@ -248,6 +220,7 @@ public final class ClientParser implements PrepareResult {
             }
 
             supportAddingReturning = true;
+            if (statementType == null) statementType = StatementType.INSERT;
             i += 6;
           }
           break;
@@ -274,6 +247,7 @@ public final class ClientParser implements PrepareResult {
             }
 
             supportAddingReturning = true;
+            if (statementType == null) statementType = StatementType.UPDATE;
             i += 6;
           }
           break;
@@ -300,6 +274,7 @@ public final class ClientParser implements PrepareResult {
             }
 
             supportAddingReturning = true;
+            if (statementType == null) statementType = StatementType.DELETE;
             i += 6;
           }
           break;
@@ -308,7 +283,13 @@ public final class ClientParser implements PrepareResult {
     }
 
     return new ClientParser(
-        queryString, query, returning, supportAddingReturning, paramPositions, paramNameList);
+        queryString,
+        query,
+        returning,
+        supportAddingReturning,
+        statementType,
+        paramPositions,
+        paramNameList);
   }
 
   /**
@@ -440,7 +421,7 @@ public final class ClientParser implements PrepareResult {
       lastChar = car;
     }
 
-    return new ClientParser(queryString, query, null, null, paramPositions, paramNameList);
+    return new ClientParser(queryString, query, null, null, null, paramPositions, paramNameList);
   }
 
   /**
@@ -592,6 +573,20 @@ public final class ClientParser implements PrepareResult {
     return supportAddingReturning;
   }
 
+  /**
+   * Type of the statement (first INSERT, UPDATE or DELETE keyword found outside strings and
+   * comments). Only available when parsed with {@link #parameterPartsCheckReturning}.
+   *
+   * @return statement type, or null if unknown or not an INSERT/UPDATE/DELETE
+   */
+  public StatementType getStatementType() {
+    return statementType;
+  }
+
+  public boolean isUpdateOrDelete() {
+    return statementType == StatementType.UPDATE || statementType == StatementType.DELETE;
+  }
+
   public void validateAddingReturning() {
 
     if (isReturning) {
@@ -601,6 +596,12 @@ public final class ClientParser implements PrepareResult {
     if (!supportAddingReturning) {
       throw new IllegalStateException("Cannot add RETURNING clause to query");
     }
+  }
+
+  public enum StatementType {
+    INSERT,
+    UPDATE,
+    DELETE
   }
 
   enum LexState {
