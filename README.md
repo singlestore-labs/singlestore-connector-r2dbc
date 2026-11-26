@@ -12,6 +12,8 @@
 
 **Non-blocking SingleStore client.**
 
+**Attention**: The code in this repository is intended for experimental use only and is not fully tested, documented, or supported by SingleStore. Visit the [SingleStore Forums](https://www.singlestore.com/forum/) to ask questions about this repository.
+
 SingleStore client, 100% Java, compatible with Java8+, apache 2.0 licensed.
 Driver permits PAM authentication that comes with SingleStore.
 

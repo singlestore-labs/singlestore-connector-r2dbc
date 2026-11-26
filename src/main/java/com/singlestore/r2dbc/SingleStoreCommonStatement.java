@@ -21,6 +21,7 @@ import com.singlestore.r2dbc.message.Protocol;
 import com.singlestore.r2dbc.message.ServerMessage;
 import com.singlestore.r2dbc.util.Assert;
 import com.singlestore.r2dbc.util.Binding;
+import com.singlestore.r2dbc.util.ClientParser;
 import com.singlestore.r2dbc.util.ServerPrepareResult;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -34,6 +35,8 @@ public abstract class SingleStoreCommonStatement implements SingleStoreStatement
   protected final ExceptionFactory factory;
   protected int expectedSize;
   protected String[] generatedColumns;
+  private Boolean returningSupported;
+  private ClientParser returningParser;
   private Binding currentBinding;
 
   public SingleStoreCommonStatement(
@@ -133,6 +136,47 @@ public abstract class SingleStoreCommonStatement implements SingleStoreStatement
 
   protected abstract int getColumnIndex(String name);
 
+  /**
+   * Statement parsed to detect an existing RETURNING clause and the statement type.
+   * Parsed once, on first use.
+   *
+   * @return parsed statement
+   */
+  protected ClientParser returningParser() {
+    if (returningParser == null) {
+      returningParser =
+          ClientParser.parameterPartsCheckReturning(initialSql, client.noBackslashEscapes());
+    }
+    return returningParser;
+  }
+
+  /**
+   * Whether RETURNING is added to this statement.
+   * It is used only for UPDATE and DELETE, and only on servers that support it.
+   * INSERT ... RETURNING is not supported by SingleStore,
+   * so generated keys for INSERT are read from the OK packet's last insert id.
+   * Computed once, on first use.
+   *
+   * @return true if RETURNING should be added to this statement
+   */
+  protected boolean returningSupported() {
+    if (returningSupported == null) {
+      returningSupported =
+          client.getVersion().supportReturning() && returningParser().isUpdateOrDelete();
+    }
+    return returningSupported;
+  }
+
+  /**
+   * Generated columns to add as RETURNING.
+   * Does not parse the statement when no generated column was requested.
+   *
+   * @return columns to return, or null when RETURNING is not used
+   */
+  protected String[] returningColumns() {
+    return generatedColumns != null && returningSupported() ? generatedColumns : null;
+  }
+
   @Nonnull
   protected Binding getCurrentBinding() {
     return currentBinding;
@@ -154,7 +198,7 @@ public abstract class SingleStoreCommonStatement implements SingleStoreStatement
                     dataRow,
                     factory,
                     generatedColumns,
-                    client.getVersion().supportReturning(),
+                    generatedColumns != null && returningSupported(),
                     configuration))
         .cast(SingleStoreResult.class);
   }

@@ -22,7 +22,8 @@ public class ConnectionMetadataTest extends BaseConnectionTest {
     assertTrue(
         meta.getDatabaseVersion().contains("7.")
             || meta.getDatabaseVersion().contains("8.")
-            || meta.getDatabaseVersion().contains("9."));
+            || meta.getDatabaseVersion().contains("9.")
+            || meta.getDatabaseVersion().contains("10."));
   }
 
   @Test
